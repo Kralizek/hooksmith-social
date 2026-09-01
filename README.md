@@ -13,6 +13,16 @@ Social publishing extensions for
 Both packages build on `@hooksmith/http` and expose Hooksmith listeners rather
 than standalone API clients.
 
+## Examples
+
+- [`examples/bluesky`](examples/bluesky) shows `post(...)` using
+  `BLUESKY_IDENTIFIER` and `BLUESKY_APP_PASSWORD`.
+- [`examples/mastodon`](examples/mastodon) shows `postStatus(...)` using
+  `MASTODON_INSTANCE` and `MASTODON_ACCESS_TOKEN`.
+
+Each example contains an event document plus a Hooksmith configuration that can
+be adapted directly by consumers.
+
 ## Development
 
 ```sh

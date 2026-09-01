@@ -1,0 +1,12 @@
+type: page.published
+timestamp: 2026-09-01T10:00:00Z
+source:
+  kind: website
+  id: example.com
+subject:
+  kind: page
+  id: /hello
+metadata:
+  url: https://example.com/hello
+data:
+  title: Hello, Hooksmith
