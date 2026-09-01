@@ -1,0 +1,17 @@
+{
+  "workspace": [
+    "./packages/bluesky",
+    "./packages/mastodon"
+  ],
+  "imports": {
+    "@hooksmith/core": "jsr:@hooksmith/core@^0.4.0",
+    "@hooksmith/http": "jsr:@hooksmith/http@^0.4.0",
+    "@std/assert": "jsr:@std/assert@^1"
+  },
+  "minimumDependencyAge": 0,
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno test -A && deno check examples/*/hooksmith.config.ts",
+    "test": "deno test -A"
+  },
+  "lock": false
+}

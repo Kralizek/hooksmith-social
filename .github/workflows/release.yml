@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        default: minor
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+
+      - name: Calculate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_tag="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+
+          if [[ -z "$latest_tag" ]]; then
+            version="0.1.0"
+          else
+            current="${latest_tag#v}"
+            IFS='.' read -r major minor patch <<< "$current"
+
+            case "${{ inputs.bump }}" in
+              major)
+                major=$((major + 1)); minor=0; patch=0 ;;
+              minor)
+                minor=$((minor + 1)); patch=0 ;;
+              patch)
+                patch=$((patch + 1)) ;;
+            esac
+
+            version="${major}.${minor}.${patch}"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Set package versions
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          deno eval --allow-read --allow-write --allow-env '
+            const version = Deno.env.get("VERSION")!;
+            const root = JSON.parse(await Deno.readTextFile("deno.json"));
+            for (const member of root.workspace) {
+              const file = `${member}/deno.json`;
+              const config = JSON.parse(await Deno.readTextFile(file));
+              config.version = version;
+              await Deno.writeTextFile(file, `${JSON.stringify(config, null, 2)}\n`);
+            }
+          '
+
+      - name: Create release commit
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            exit 0
+          fi
+          mapfile -t manifests < <(jq -r '.workspace[] + "/deno.json"' deno.json)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${manifests[@]}"
+          git commit -m "Release $TAG"
+
+      - name: Validate
+        run: |
+          deno task check
+          deno publish --dry-run
+
+      - name: Create immutable version tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists." >&2
+            exit 1
+          fi
+          git tag "$TAG" HEAD
+          git push origin "$TAG"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          args=("$TAG" --verify-tag --generate-notes --title "$TAG")
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            args+=(--notes-start-tag "$PREVIOUS_TAG")
+          fi
+          gh release create "${args[@]}"
+
+  publish:
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release tag $TAG is not a stable semantic version." >&2
+            exit 1
+          fi
+          version="${TAG#v}"
+          while IFS= read -r manifest; do
+            actual="$(jq -r .version "$manifest")"
+            if [[ "$actual" != "$version" ]]; then
+              echo "$manifest has version $actual, expected $version from tag $TAG" >&2
+              exit 1
+            fi
+          done < <(jq -r '.workspace[] + "/deno.json"' deno.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check
+        run: deno task check
+
+      - name: Validate packages
+        run: deno publish --dry-run
+
+      - name: Pack release assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ASSET_DIR: ${{ runner.temp }}/hooksmith-social-dist
+        run: |
+          set -euo pipefail
+          mkdir -p "$ASSET_DIR"
+          while IFS= read -r member; do
+            name="$(jq -r .name "$member/deno.json")"
+            asset_name="${name#@hooksmith/}"
+            (
+              cd "$member"
+              deno pack --output "$ASSET_DIR/hooksmith-${asset_name}-${VERSION}.tgz"
+            )
+          done < <(jq -r '.workspace[]' deno.json)
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          ASSET_DIR: ${{ runner.temp }}/hooksmith-social-dist
+        run: gh release upload "$TAG" "$ASSET_DIR"/*.tgz
+
+      - name: Publish packages
+        run: deno publish
