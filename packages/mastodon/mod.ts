@@ -73,7 +73,11 @@ export function postStatus<TEvent extends Event = Event>(
         values.language = await resolve(options.language, event, context);
       }
       if (options.spoilerText !== undefined) {
-        values.spoiler_text = await resolve(options.spoilerText, event, context);
+        values.spoiler_text = await resolve(
+          options.spoilerText,
+          event,
+          context,
+        );
       }
       if (options.sensitive !== undefined) {
         values.sensitive = String(

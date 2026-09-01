@@ -1,9 +1,4 @@
-import type {
-  Context,
-  Event,
-  Listener,
-  ListenerResult,
-} from "@hooksmith/core";
+import type { Context, Event, Listener, ListenerResult } from "@hooksmith/core";
 import {
   bearerAuth,
   expectStatus,
@@ -79,7 +74,9 @@ export function post<TEvent extends Event = Event>(
       if (!sessionResult.success) {
         return {
           success: false,
-          message: `Bluesky authentication failed: ${sessionResult.message ?? "request failed"}`,
+          message: `Bluesky authentication failed: ${
+            sessionResult.message ?? "request failed"
+          }`,
           data: sessionResult.data,
         };
       }

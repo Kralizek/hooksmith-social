@@ -12,6 +12,10 @@ const listener = post({
 });
 ```
 
-`post` creates a short-lived Bluesky session for the invocation and writes an `app.bsky.feed.post` record. The listener returns the created record URI and CID.
+`post` creates a short-lived Bluesky session for the invocation and writes an
+`app.bsky.feed.post` record. The listener returns the created record URI and
+CID.
 
-`service` defaults to `https://bsky.social` and can be overridden for accounts hosted on another PDS. `languages` and `createdAt` are optional; values may be static or event/context-derived factories.
+`service` defaults to `https://bsky.social` and can be overridden for accounts
+hosted on another PDS. `languages` and `createdAt` are optional; values may be
+static or event/context-derived factories.
