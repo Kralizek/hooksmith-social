@@ -191,7 +191,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.create-release.outputs.tag }}
           ASSET_DIR: ${{ runner.temp }}/hooksmith-social-dist
-        run: gh release upload "$TAG" "$ASSET_DIR"/*.tgz
+        run: gh release upload "$TAG" "$ASSET_DIR"/*.tgz --clobber
 
       - name: Publish packages
         run: deno publish
