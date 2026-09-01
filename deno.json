@@ -8,6 +8,7 @@
     "@hooksmith/http": "jsr:@hooksmith/http@^0.4.0",
     "@std/assert": "jsr:@std/assert@^1"
   },
+  "minimumDependencyAge": 0,
   "tasks": {
     "check": "deno fmt --check && deno lint && deno test -A",
     "test": "deno test -A"
