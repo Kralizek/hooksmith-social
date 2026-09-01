@@ -48,18 +48,20 @@ export function post<TEvent extends Event = Event>(
 
       const sessionResult = await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.server.createSession`,
-        body: jsonBody<TEvent>(async (current, currentContext) => ({
-          identifier: await resolve(
-            options.identifier,
-            current,
-            currentContext,
-          ),
-          password: await resolve(
-            options.appPassword,
-            current,
-            currentContext,
-          ),
-        })),
+        body: jsonBody<TEvent>(
+          async (current: TEvent, currentContext: Context) => ({
+            identifier: await resolve(
+              options.identifier,
+              current,
+              currentContext,
+            ),
+            password: await resolve(
+              options.appPassword,
+              current,
+              currentContext,
+            ),
+          }),
+        ),
         response: {
           parse: "json",
           success: expectStatus(200),
