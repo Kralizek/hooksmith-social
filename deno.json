@@ -10,7 +10,8 @@
   },
   "minimumDependencyAge": 0,
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno test -A && deno check examples/*/hooksmith.config.ts",
+    "check": "deno fmt --check && deno lint && deno test -A && deno task check:examples",
+    "check:examples": "deno run --allow-read --allow-run scripts/check_examples.ts",
     "test": "deno test -A"
   },
   "lock": false
