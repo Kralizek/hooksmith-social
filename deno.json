@@ -4,8 +4,8 @@
     "./packages/mastodon"
   ],
   "imports": {
-    "@hooksmith/core": "jsr:@hooksmith/core@^0.8.0",
-    "@hooksmith/http": "jsr:@hooksmith/http@^0.8.0",
+    "@hooksmith/core": "jsr:@hooksmith/core@^0.8.1",
+    "@hooksmith/http": "jsr:@hooksmith/http@^0.8.1",
     "@std/assert": "jsr:@std/assert@^1"
   },
   "minimumDependencyAge": 0,
