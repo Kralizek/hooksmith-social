@@ -14,5 +14,10 @@
     "check:examples": "deno run --allow-read --allow-run scripts/check_examples.ts",
     "test": "deno test -A"
   },
+  "fmt": {
+    "exclude": [
+      "README.md"
+    ]
+  },
   "lock": false
 }
