@@ -1,7 +1,8 @@
 {
   "imports": {
-    "@hooksmith/core": "jsr:@hooksmith/core@^0.4.0",
+    "@hooksmith/core": "jsr:@hooksmith/core@^0.8.0",
     "@hooksmith/mastodon": "../../packages/mastodon/mod.ts"
   },
+  "minimumDependencyAge": 0,
   "lock": false
 }
