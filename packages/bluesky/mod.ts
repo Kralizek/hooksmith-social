@@ -7,11 +7,13 @@ import {
   type ValueOrFactory,
 } from "@hooksmith/http";
 
+/** Identifiers returned by Bluesky after creating a post record. */
 export interface BlueskyPostResult {
   uri: string;
   cid: string;
 }
 
+/** Options used to publish a Bluesky post from a Hooksmith event. */
 export interface BlueskyPostOptions<TEvent extends Event = Event> {
   identifier: ValueOrFactory<string, TEvent>;
   appPassword: ValueOrFactory<string, TEvent>;

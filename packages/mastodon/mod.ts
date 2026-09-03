@@ -8,8 +8,10 @@ import {
   type ValueOrFactory,
 } from "@hooksmith/http";
 
+/** Visibility levels accepted when publishing a Mastodon status. */
 export type MastodonVisibility = "public" | "unlisted" | "private" | "direct";
 
+/** Metadata returned after successfully publishing a Mastodon status. */
 export interface MastodonStatusResult {
   id: string;
   url?: string;
@@ -17,6 +19,7 @@ export interface MastodonStatusResult {
   createdAt: string;
 }
 
+/** Options used to publish a Mastodon status from a Hooksmith event. */
 export interface MastodonStatusOptions<TEvent extends Event = Event> {
   instance: ValueOrFactory<string | URL, TEvent>;
   accessToken: ValueOrFactory<string, TEvent>;
