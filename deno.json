@@ -10,7 +10,8 @@
   },
   "minimumDependencyAge": 0,
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno test -A && deno task check:examples",
+    "check": "deno fmt --check && deno lint && deno task check:docs && deno test -A && deno task check:examples",
+    "check:docs": "deno run --allow-read scripts/check_export_docs.ts",
     "check:examples": "deno run --allow-read --allow-run scripts/check_examples.ts",
     "test": "deno test -A"
   },
