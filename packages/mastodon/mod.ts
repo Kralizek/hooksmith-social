@@ -59,6 +59,7 @@ export function postStatus<TEvent extends Event = Event>(
     );
 
   return httpPost({
+    name: "mastodon-post-status",
     url: async (event, context) => {
       const instance = await resolve(options.instance, event, context);
       return `${String(instance).replace(/\/+$/, "")}/api/v1/statuses`;
