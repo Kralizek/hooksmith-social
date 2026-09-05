@@ -11,7 +11,17 @@ const event: Event = {
 };
 
 const context: Context = {
-  log: { debug() {}, info() {}, warn() {}, error() {} },
+  logger: {
+    getLogger() {
+      return {
+        trace() {},
+        debug() {},
+        info() {},
+        warn() {},
+        error() {},
+      };
+    },
+  },
 };
 
 Deno.test("postStatus publishes a Mastodon status", async () => {
