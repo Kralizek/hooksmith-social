@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import type { Context, Event } from "@hooksmith/core";
+import { nullLoggerFactory } from "@hooksmith/runtime";
 import { postStatus } from "./mod.ts";
 
 const event: Event = {
@@ -11,17 +12,7 @@ const event: Event = {
 };
 
 const context: Context = {
-  logger: {
-    getLogger() {
-      return {
-        trace() {},
-        debug() {},
-        info() {},
-        warn() {},
-        error() {},
-      };
-    },
-  },
+  logger: nullLoggerFactory,
 };
 
 Deno.test("postStatus publishes a Mastodon status", async () => {
