@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import type { Context, Event } from "@hooksmith/core";
+import { nullLoggerFactory } from "@hooksmith/runtime";
 import { post } from "./mod.ts";
 
 const event: Event = {
@@ -11,7 +12,7 @@ const event: Event = {
 };
 
 const context: Context = {
-  log: { debug() {}, info() {}, warn() {}, error() {} },
+  logger: nullLoggerFactory,
 };
 
 Deno.test("post authenticates and creates a Bluesky post", async () => {
