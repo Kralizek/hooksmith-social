@@ -117,7 +117,91 @@ Deno.test("post trims trailing punctuation from link facets", async () => {
   });
 });
 
-Deno.test("post omits facets when the text has no links", async () => {
+Deno.test("post creates hashtag facets with UTF-8 byte offsets", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+    if (request === 1) {
+      return Promise.resolve(Response.json({
+        did: "did:plc:example",
+        accessJwt: "access-token",
+      }));
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.facets, [
+      {
+        index: { byteStart: 7, byteEnd: 14 },
+        features: [{
+          $type: "app.bsky.richtext.facet#tag",
+          tag: "dotnet",
+        }],
+      },
+      {
+        index: { byteStart: 15, byteEnd: 25 },
+        features: [{
+          $type: "app.bsky.richtext.facet#tag",
+          tag: "svenska",
+        }],
+      },
+    ]);
+    return Promise.resolve(Response.json({
+      uri: "at://did:plc:example/app.bsky.feed.post/abc",
+      cid: "bafycid",
+    }));
+  }, async () => {
+    await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hej 👋 #dotnet #svenska",
+    }).run(event, context);
+  });
+});
+
+Deno.test("post does not create hashtag facets inside links", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+    if (request === 1) {
+      return Promise.resolve(Response.json({
+        did: "did:plc:example",
+        accessJwt: "access-token",
+      }));
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.facets, [
+      {
+        index: { byteStart: 4, byteEnd: 36 },
+        features: [{
+          $type: "app.bsky.richtext.facet#link",
+          uri: "https://example.com/#dotnet",
+        }],
+      },
+      {
+        index: { byteStart: 37, byteEnd: 44 },
+        features: [{
+          $type: "app.bsky.richtext.facet#tag",
+          tag: "deno",
+        }],
+      },
+    ]);
+    return Promise.resolve(Response.json({
+      uri: "at://did:plc:example/app.bsky.feed.post/abc",
+      cid: "bafycid",
+    }));
+  }, async () => {
+    await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "See https://example.com/#dotnet #deno",
+    }).run(event, context);
+  });
+});
+
+Deno.test("post omits facets when the text has no rich text", async () => {
   let request = 0;
 
   await withFetch((_input, init) => {
