@@ -38,6 +38,21 @@ interface BlueskyErrorResponse {
   message?: string;
 }
 
+interface BlueskyFacet {
+  index: {
+    byteStart: number;
+    byteEnd: number;
+  };
+  features: Array<{
+    $type: "app.bsky.richtext.facet#link";
+    uri: string;
+  }>;
+}
+
+const linkPattern = /https?:\/\/[^\s]+/gu;
+const trailingPunctuation = /[.,!?;:]+$/u;
+const encoder = new TextEncoder();
+
 export function post<TEvent extends Event = Event>(
   options: BlueskyPostOptions<TEvent>,
 ): Listener<TEvent> {
@@ -93,6 +108,7 @@ export function post<TEvent extends Event = Event>(
       const languages = options.languages === undefined
         ? undefined
         : await resolve(options.languages, event, context);
+      const facets = detectLinkFacets(text);
 
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
@@ -105,6 +121,7 @@ export function post<TEvent extends Event = Event>(
             text,
             createdAt,
             ...(languages === undefined ? {} : { langs: languages }),
+            ...(facets.length === 0 ? {} : { facets }),
           },
         }),
         response: {
@@ -122,6 +139,28 @@ export function post<TEvent extends Event = Event>(
       }).run(event, context);
     },
   };
+}
+
+function detectLinkFacets(text: string): BlueskyFacet[] {
+  const facets: BlueskyFacet[] = [];
+
+  for (const match of text.matchAll(linkPattern)) {
+    const original = match[0];
+    const uri = original.replace(trailingPunctuation, "");
+    const characterStart = match.index;
+    const byteStart = encoder.encode(text.slice(0, characterStart)).length;
+    const byteEnd = byteStart + encoder.encode(uri).length;
+
+    facets.push({
+      index: { byteStart, byteEnd },
+      features: [{
+        $type: "app.bsky.richtext.facet#link",
+        uri,
+      }],
+    });
+  }
+
+  return facets;
 }
 
 async function resolve<T, TEvent extends Event>(
