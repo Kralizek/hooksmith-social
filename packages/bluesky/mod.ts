@@ -66,7 +66,7 @@ interface DetectedFacet {
   feature: BlueskyFacetFeature;
 }
 
-const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/gu;
+const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
 const encoder = new TextEncoder();
@@ -202,13 +202,16 @@ function detectFacets(text: string): BlueskyFacet[] {
 
   return detected
     .sort((left, right) => left.characterStart - right.characterStart)
-    .map(({ characterStart, characterEnd, feature }) => ({
-      index: {
-        byteStart: encoder.encode(text.slice(0, characterStart)).length,
-        byteEnd: encoder.encode(text.slice(0, characterEnd)).length,
-      },
-      features: [feature],
-    }));
+    .map(({ characterStart, characterEnd, feature }) => {
+      const byteStart = encoder.encode(text.slice(0, characterStart)).length;
+      const byteEnd = byteStart +
+        encoder.encode(text.slice(characterStart, characterEnd)).length;
+
+      return {
+        index: { byteStart, byteEnd },
+        features: [feature],
+      };
+    });
 }
 
 function overlapsDetected(
