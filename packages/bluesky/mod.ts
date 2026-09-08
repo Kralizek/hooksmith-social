@@ -38,19 +38,37 @@ interface BlueskyErrorResponse {
   message?: string;
 }
 
+type BlueskyFacetFeature =
+  | {
+    $type: "app.bsky.richtext.facet#link";
+    uri: string;
+  }
+  | {
+    $type: "app.bsky.richtext.facet#mention";
+    did: string;
+  }
+  | {
+    $type: "app.bsky.richtext.facet#tag";
+    tag: string;
+  };
+
 interface BlueskyFacet {
   index: {
     byteStart: number;
     byteEnd: number;
   };
-  features: Array<{
-    $type: "app.bsky.richtext.facet#link";
-    uri: string;
-  }>;
+  features: BlueskyFacetFeature[];
+}
+
+interface DetectedFacet {
+  characterStart: number;
+  characterEnd: number;
+  feature: BlueskyFacetFeature;
 }
 
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/gu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
+const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
 const encoder = new TextEncoder();
 
 export function post<TEvent extends Event = Event>(
@@ -108,7 +126,7 @@ export function post<TEvent extends Event = Event>(
       const languages = options.languages === undefined
         ? undefined
         : await resolve(options.languages, event, context);
-      const facets = detectLinkFacets(text);
+      const facets = detectFacets(text);
 
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
@@ -141,8 +159,8 @@ export function post<TEvent extends Event = Event>(
   };
 }
 
-function detectLinkFacets(text: string): BlueskyFacet[] {
-  const facets: BlueskyFacet[] = [];
+function detectFacets(text: string): BlueskyFacet[] {
+  const detected: DetectedFacet[] = [];
 
   for (const match of text.matchAll(linkPattern)) {
     const characterStart = match.index;
@@ -151,19 +169,57 @@ function detectLinkFacets(text: string): BlueskyFacet[] {
     const uri = match[0].replace(trailingDelimiters, "");
     if (uri.length === 0) continue;
 
-    const byteStart = encoder.encode(text.slice(0, characterStart)).length;
-    const byteEnd = byteStart + encoder.encode(uri).length;
-
-    facets.push({
-      index: { byteStart, byteEnd },
-      features: [{
+    detected.push({
+      characterStart,
+      characterEnd: characterStart + uri.length,
+      feature: {
         $type: "app.bsky.richtext.facet#link",
         uri,
-      }],
+      },
     });
   }
 
-  return facets;
+  for (const match of text.matchAll(tagPattern)) {
+    const matchStart = match.index;
+    if (matchStart === undefined) continue;
+
+    const prefix = match[1];
+    const tag = match[2];
+    const characterStart = matchStart + prefix.length;
+    const characterEnd = characterStart + tag.length + 1;
+
+    if (overlapsDetected(characterStart, characterEnd, detected)) continue;
+
+    detected.push({
+      characterStart,
+      characterEnd,
+      feature: {
+        $type: "app.bsky.richtext.facet#tag",
+        tag,
+      },
+    });
+  }
+
+  return detected
+    .sort((left, right) => left.characterStart - right.characterStart)
+    .map(({ characterStart, characterEnd, feature }) => ({
+      index: {
+        byteStart: encoder.encode(text.slice(0, characterStart)).length,
+        byteEnd: encoder.encode(text.slice(0, characterEnd)).length,
+      },
+      features: [feature],
+    }));
+}
+
+function overlapsDetected(
+  characterStart: number,
+  characterEnd: number,
+  detected: readonly DetectedFacet[],
+): boolean {
+  return detected.some((existing) =>
+    characterStart < existing.characterEnd &&
+    characterEnd > existing.characterStart
+  );
 }
 
 async function resolve<T, TEvent extends Event>(
