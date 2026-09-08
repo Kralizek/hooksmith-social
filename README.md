@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Kralizek/hooksmith-social/actions/workflows/ci.yml/badge.svg)](https://github.com/Kralizek/hooksmith-social/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/Kralizek/hooksmith-social)](https://github.com/Kralizek/hooksmith-social/releases/latest)
+[![Hooksmith release](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKralizek%2Fhooksmith-social%2Fbadges%2Fhooksmith.json)](https://github.com/Kralizek/hooksmith/releases)
 
 Social publishing extensions for [Hooksmith](https://github.com/Kralizek/hooksmith).
 
