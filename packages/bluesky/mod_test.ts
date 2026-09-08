@@ -84,6 +84,39 @@ Deno.test("post authenticates and creates a Bluesky post", async () => {
   });
 });
 
+Deno.test("post detects uppercase HTTP schemes", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+    if (request === 1) {
+      return Promise.resolve(Response.json({
+        did: "did:plc:example",
+        accessJwt: "access-token",
+      }));
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.facets, [{
+      index: { byteStart: 6, byteEnd: 31 },
+      features: [{
+        $type: "app.bsky.richtext.facet#link",
+        uri: "HTTPS://example.com/hello",
+      }],
+    }]);
+    return Promise.resolve(Response.json({
+      uri: "at://did:plc:example/app.bsky.feed.post/abc",
+      cid: "bafycid",
+    }));
+  }, async () => {
+    await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Read: HTTPS://example.com/hello",
+    }).run(event, context);
+  });
+});
+
 Deno.test("post trims trailing punctuation from link facets", async () => {
   let request = 0;
 
