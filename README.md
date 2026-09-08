@@ -1,5 +1,8 @@
 # hooksmith-social
 
+[![CI](https://github.com/Kralizek/hooksmith-social/actions/workflows/ci.yml/badge.svg)](https://github.com/Kralizek/hooksmith-social/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Kralizek/hooksmith-social)](https://github.com/Kralizek/hooksmith-social/releases/latest)
+
 Social publishing extensions for [Hooksmith](https://github.com/Kralizek/hooksmith).
 
 These packages expose Hooksmith listeners for publishing to social platforms. They are deliberately listener-oriented rather than general-purpose platform SDKs, and they build on `@hooksmith/http` for transport and response handling.
