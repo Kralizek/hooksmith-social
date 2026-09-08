@@ -195,3 +195,9 @@ jobs:
 
       - name: Publish packages
         run: deno publish
+
+  update-badges:
+    needs: publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/update-badges.yml
