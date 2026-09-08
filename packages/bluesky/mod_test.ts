@@ -132,14 +132,14 @@ Deno.test("post creates hashtag facets with UTF-8 byte offsets", async () => {
     const body = JSON.parse(String(init?.body));
     assertEquals(body.record.facets, [
       {
-        index: { byteStart: 7, byteEnd: 14 },
+        index: { byteStart: 9, byteEnd: 16 },
         features: [{
           $type: "app.bsky.richtext.facet#tag",
           tag: "dotnet",
         }],
       },
       {
-        index: { byteStart: 15, byteEnd: 25 },
+        index: { byteStart: 17, byteEnd: 25 },
         features: [{
           $type: "app.bsky.richtext.facet#tag",
           tag: "svenska",
@@ -174,14 +174,14 @@ Deno.test("post does not create hashtag facets inside links", async () => {
     const body = JSON.parse(String(init?.body));
     assertEquals(body.record.facets, [
       {
-        index: { byteStart: 4, byteEnd: 36 },
+        index: { byteStart: 4, byteEnd: 31 },
         features: [{
           $type: "app.bsky.richtext.facet#link",
           uri: "https://example.com/#dotnet",
         }],
       },
       {
-        index: { byteStart: 37, byteEnd: 44 },
+        index: { byteStart: 32, byteEnd: 37 },
         features: [{
           $type: "app.bsky.richtext.facet#tag",
           tag: "deno",
