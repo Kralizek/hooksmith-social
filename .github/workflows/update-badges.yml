@@ -1,0 +1,109 @@
+name: Update badges
+
+on:
+  push:
+    branches:
+      - master
+  release:
+    types:
+      - published
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-badges
+  cancel-in-progress: true
+
+jobs:
+  hooksmith:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Hooksmith release status
+        id: hooksmith
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          downstream_tag="$(
+            gh release view \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName \
+              --jq .tagName
+          )"
+
+          released_version="$(
+            git show "$downstream_tag:deno.json" |
+              jq -r '.imports["@hooksmith/core"]' |
+              sed -E 's#^jsr:@hooksmith/core@[\^~=]*##'
+          )"
+
+          latest_version="$(
+            gh release view \
+              --repo Kralizek/hooksmith \
+              --json tagName \
+              --jq '.tagName | ltrimstr("v")'
+          )"
+
+          if [[ "$released_version" == "$latest_version" ]]; then
+            message="$released_version"
+            color="brightgreen"
+          else
+            message="$released_version → $latest_version"
+            color="orange"
+          fi
+
+          echo "message=$message" >> "$GITHUB_OUTPUT"
+          echo "color=$color" >> "$GITHUB_OUTPUT"
+
+      - name: Build badge metadata
+        shell: bash
+        env:
+          MESSAGE: ${{ steps.hooksmith.outputs.message }}
+          COLOR: ${{ steps.hooksmith.outputs.color }}
+        run: |
+          jq -n \
+            --arg message "$MESSAGE" \
+            --arg color "$COLOR" \
+            '{
+              schemaVersion: 1,
+              label: "Hooksmith release",
+              message: $message,
+              color: $color
+            }' > "$RUNNER_TEMP/hooksmith.json"
+
+      - name: Publish badge metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git fetch origin badges:badges
+            git switch badges
+          else
+            git switch --orphan badges
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cp "$RUNNER_TEMP/hooksmith.json" hooksmith.json
+          git add hooksmith.json
+
+          if git diff --cached --quiet; then
+            echo "Badge metadata is unchanged."
+            exit 0
+          fi
+
+          git commit -m "Update Hooksmith release badge"
+          git push origin badges
