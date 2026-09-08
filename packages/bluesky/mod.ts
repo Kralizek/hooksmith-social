@@ -49,8 +49,8 @@ interface BlueskyFacet {
   }>;
 }
 
-const linkPattern = /https?:\/\/[^\s]+/gu;
-const trailingPunctuation = /[.,!?;:]+$/u;
+const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/gu;
+const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const encoder = new TextEncoder();
 
 export function post<TEvent extends Event = Event>(
@@ -145,9 +145,12 @@ function detectLinkFacets(text: string): BlueskyFacet[] {
   const facets: BlueskyFacet[] = [];
 
   for (const match of text.matchAll(linkPattern)) {
-    const original = match[0];
-    const uri = original.replace(trailingPunctuation, "");
     const characterStart = match.index;
+    if (characterStart === undefined) continue;
+
+    const uri = match[0].replace(trailingDelimiters, "");
+    if (uri.length === 0) continue;
+
     const byteStart = encoder.encode(text.slice(0, characterStart)).length;
     const byteEnd = byteStart + encoder.encode(uri).length;
 
