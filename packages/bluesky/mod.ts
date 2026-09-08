@@ -61,8 +61,8 @@ interface BlueskyFacet {
 }
 
 interface DetectedFacet {
-  characterStart: number;
-  characterEnd: number;
+  codeUnitStart: number;
+  codeUnitEnd: number;
   feature: BlueskyFacetFeature;
 }
 
@@ -163,15 +163,15 @@ function detectFacets(text: string): BlueskyFacet[] {
   const detected: DetectedFacet[] = [];
 
   for (const match of text.matchAll(linkPattern)) {
-    const characterStart = match.index;
-    if (characterStart === undefined) continue;
+    const codeUnitStart = match.index;
+    if (codeUnitStart === undefined) continue;
 
     const uri = match[0].replace(trailingDelimiters, "");
     if (uri.length === 0) continue;
 
     detected.push({
-      characterStart,
-      characterEnd: characterStart + uri.length,
+      codeUnitStart,
+      codeUnitEnd: codeUnitStart + uri.length,
       feature: {
         $type: "app.bsky.richtext.facet#link",
         uri,
@@ -185,14 +185,14 @@ function detectFacets(text: string): BlueskyFacet[] {
 
     const prefix = match[1];
     const tag = match[2];
-    const characterStart = matchStart + prefix.length;
-    const characterEnd = characterStart + tag.length + 1;
+    const codeUnitStart = matchStart + prefix.length;
+    const codeUnitEnd = codeUnitStart + tag.length + 1;
 
-    if (overlapsDetected(characterStart, characterEnd, detected)) continue;
+    if (overlapsDetected(codeUnitStart, codeUnitEnd, detected)) continue;
 
     detected.push({
-      characterStart,
-      characterEnd,
+      codeUnitStart,
+      codeUnitEnd,
       feature: {
         $type: "app.bsky.richtext.facet#tag",
         tag,
@@ -201,11 +201,11 @@ function detectFacets(text: string): BlueskyFacet[] {
   }
 
   return detected
-    .sort((left, right) => left.characterStart - right.characterStart)
-    .map(({ characterStart, characterEnd, feature }) => {
-      const byteStart = encoder.encode(text.slice(0, characterStart)).length;
+    .sort((left, right) => left.codeUnitStart - right.codeUnitStart)
+    .map(({ codeUnitStart, codeUnitEnd, feature }) => {
+      const byteStart = encoder.encode(text.slice(0, codeUnitStart)).length;
       const byteEnd = byteStart +
-        encoder.encode(text.slice(characterStart, characterEnd)).length;
+        encoder.encode(text.slice(codeUnitStart, codeUnitEnd)).length;
 
       return {
         index: { byteStart, byteEnd },
@@ -215,13 +215,13 @@ function detectFacets(text: string): BlueskyFacet[] {
 }
 
 function overlapsDetected(
-  characterStart: number,
-  characterEnd: number,
+  codeUnitStart: number,
+  codeUnitEnd: number,
   detected: readonly DetectedFacet[],
 ): boolean {
   return detected.some((existing) =>
-    characterStart < existing.characterEnd &&
-    characterEnd > existing.characterStart
+    codeUnitStart < existing.codeUnitEnd &&
+    codeUnitEnd > existing.codeUnitStart
   );
 }
 
