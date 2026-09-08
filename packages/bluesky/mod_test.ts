@@ -50,9 +50,16 @@ Deno.test("post authenticates and creates a Bluesky post", async () => {
       collection: "app.bsky.feed.post",
       record: {
         $type: "app.bsky.feed.post",
-        text: "Published: https://example.com/hello",
+        text: "Published ✍️ https://example.com/hello",
         createdAt: "2026-09-01T12:00:00.000Z",
         langs: ["en"],
+        facets: [{
+          index: { byteStart: 17, byteEnd: 42 },
+          features: [{
+            $type: "app.bsky.richtext.facet#link",
+            uri: "https://example.com/hello",
+          }],
+        }],
       },
     });
     return Promise.resolve(Response.json({
@@ -63,7 +70,7 @@ Deno.test("post authenticates and creates a Bluesky post", async () => {
     const result = await post({
       identifier: "example.bsky.social",
       appPassword: "app-password",
-      text: (current) => `Published: ${current.metadata?.url}`,
+      text: (current) => `Published ✍️ ${current.metadata?.url}`,
       createdAt: "2026-09-01T12:00:00.000Z",
       languages: ["en"],
     }).run(event, context);
@@ -74,6 +81,66 @@ Deno.test("post authenticates and creates a Bluesky post", async () => {
       cid: "bafycid",
     });
     assertEquals(request, 2);
+  });
+});
+
+Deno.test("post trims trailing punctuation from link facets", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+    if (request === 1) {
+      return Promise.resolve(Response.json({
+        did: "did:plc:example",
+        accessJwt: "access-token",
+      }));
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.facets, [{
+      index: { byteStart: 6, byteEnd: 31 },
+      features: [{
+        $type: "app.bsky.richtext.facet#link",
+        uri: "https://example.com/hello",
+      }],
+    }]);
+    return Promise.resolve(Response.json({
+      uri: "at://did:plc:example/app.bsky.feed.post/abc",
+      cid: "bafycid",
+    }));
+  }, async () => {
+    await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Read: https://example.com/hello.",
+    }).run(event, context);
+  });
+});
+
+Deno.test("post omits facets when the text has no links", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+    if (request === 1) {
+      return Promise.resolve(Response.json({
+        did: "did:plc:example",
+        accessJwt: "access-token",
+      }));
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.facets, undefined);
+    return Promise.resolve(Response.json({
+      uri: "at://did:plc:example/app.bsky.feed.post/abc",
+      cid: "bafycid",
+    }));
+  }, async () => {
+    await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello Bluesky",
+    }).run(event, context);
   });
 });
 
