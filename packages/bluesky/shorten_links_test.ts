@@ -34,7 +34,7 @@ Deno.test("post shortens displayed links while preserving the target URI", async
     const body = JSON.parse(String(init?.body));
     assertEquals(
       body.record.text,
-      "Read https://renatogolia.com/2026/09/14/sc…",
+      "Read renatogolia.com/2026/09/14/sc…",
     );
     assertEquals(body.record.facets, [{
       index: { byteStart: 5, byteEnd: 37 },
@@ -61,7 +61,7 @@ Deno.test("post shortens displayed links while preserving the target URI", async
   });
 });
 
-Deno.test("post leaves short links unchanged", async () => {
+Deno.test("post normalizes short links to display form", async () => {
   let request = 0;
 
   await withFetch((_input, init) => {
@@ -75,9 +75,9 @@ Deno.test("post leaves short links unchanged", async () => {
     }
 
     const body = JSON.parse(String(init?.body));
-    assertEquals(body.record.text, "Read https://example.com/a");
+    assertEquals(body.record.text, "Read example.com/a");
     assertEquals(body.record.facets, [{
-      index: { byteStart: 5, byteEnd: 26 },
+      index: { byteStart: 5, byteEnd: 18 },
       features: [{
         $type: "app.bsky.richtext.facet#link",
         uri: "https://example.com/a",
