@@ -161,7 +161,9 @@ export function post<TEvent extends Event = Event>(
             text: richText.text,
             createdAt,
             ...(languages === undefined ? {} : { langs: languages }),
-            ...(richText.facets.length === 0 ? {} : { facets: richText.facets }),
+            ...(richText.facets.length === 0
+              ? {}
+              : { facets: richText.facets }),
           },
         }),
         response: {
