@@ -71,10 +71,14 @@ interface PreparedRichText {
   facets: BlueskyFacet[];
 }
 
+const maxGraphemeLength = 300;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
 const encoder = new TextEncoder();
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
 
 export function post<TEvent extends Event = Event>(
   options: BlueskyPostOptions<TEvent>,
@@ -132,6 +136,19 @@ export function post<TEvent extends Event = Event>(
         ? undefined
         : await resolve(options.languages, event, context);
       const richText = prepareRichText(sourceText);
+      const graphemeLength = countGraphemes(richText.text);
+
+      if (graphemeLength > maxGraphemeLength) {
+        return {
+          success: false,
+          message:
+            `Bluesky post text is ${graphemeLength} graphemes; maximum is ${maxGraphemeLength}.`,
+          data: {
+            graphemeLength,
+            maxGraphemeLength,
+          },
+        };
+      }
 
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
@@ -281,6 +298,10 @@ function shortenUrl(value: string): string {
   } catch {
     return value;
   }
+}
+
+function countGraphemes(text: string): number {
+  return [...graphemeSegmenter.segment(text)].length;
 }
 
 function overlapsDetected(
