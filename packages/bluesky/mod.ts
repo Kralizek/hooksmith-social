@@ -66,10 +66,20 @@ interface DetectedFacet {
   feature: BlueskyFacetFeature;
 }
 
+interface PreparedRichText {
+  text: string;
+  facets: BlueskyFacet[];
+}
+
+const maxGraphemeLength = 300;
+const maxLinkDisplayLength = 30;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
 const encoder = new TextEncoder();
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
 
 export function post<TEvent extends Event = Event>(
   options: BlueskyPostOptions<TEvent>,
@@ -119,14 +129,27 @@ export function post<TEvent extends Event = Event>(
       }
 
       const session = sessionResult.data as BlueskySession;
-      const text = await resolve(options.text, event, context);
+      const sourceText = await resolve(options.text, event, context);
       const createdAt = options.createdAt === undefined
         ? new Date().toISOString()
         : await resolve(options.createdAt, event, context);
       const languages = options.languages === undefined
         ? undefined
         : await resolve(options.languages, event, context);
-      const facets = detectFacets(text);
+      const richText = prepareRichText(sourceText);
+      const graphemeLength = countGraphemes(richText.text);
+
+      if (graphemeLength > maxGraphemeLength) {
+        return {
+          success: false,
+          message:
+            `Bluesky post text is ${graphemeLength} graphemes; maximum is ${maxGraphemeLength}.`,
+          data: {
+            graphemeLength,
+            maxGraphemeLength,
+          },
+        };
+      }
 
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
@@ -136,10 +159,12 @@ export function post<TEvent extends Event = Event>(
           collection: "app.bsky.feed.post",
           record: {
             $type: "app.bsky.feed.post",
-            text,
+            text: richText.text,
             createdAt,
             ...(languages === undefined ? {} : { langs: languages }),
-            ...(facets.length === 0 ? {} : { facets }),
+            ...(richText.facets.length === 0
+              ? {}
+              : { facets: richText.facets }),
           },
         }),
         response: {
@@ -159,7 +184,46 @@ export function post<TEvent extends Event = Event>(
   };
 }
 
-function detectFacets(text: string): BlueskyFacet[] {
+function prepareRichText(text: string): PreparedRichText {
+  const detected = detectFacets(text);
+  if (detected.length === 0) {
+    return { text, facets: [] };
+  }
+
+  let cursor = 0;
+  let preparedText = "";
+  const prepared: DetectedFacet[] = [];
+
+  for (const facet of detected) {
+    preparedText += text.slice(cursor, facet.codeUnitStart);
+
+    const original = text.slice(facet.codeUnitStart, facet.codeUnitEnd);
+    const display = facet.feature.$type === "app.bsky.richtext.facet#link"
+      ? shortenUrl(original)
+      : original;
+
+    const codeUnitStart = preparedText.length;
+    preparedText += display;
+    const codeUnitEnd = preparedText.length;
+
+    prepared.push({
+      codeUnitStart,
+      codeUnitEnd,
+      feature: facet.feature,
+    });
+
+    cursor = facet.codeUnitEnd;
+  }
+
+  preparedText += text.slice(cursor);
+
+  return {
+    text: preparedText,
+    facets: materializeFacets(preparedText, prepared),
+  };
+}
+
+function detectFacets(text: string): DetectedFacet[] {
   const detected: DetectedFacet[] = [];
 
   for (const match of text.matchAll(linkPattern)) {
@@ -200,18 +264,51 @@ function detectFacets(text: string): BlueskyFacet[] {
     });
   }
 
-  return detected
-    .sort((left, right) => left.codeUnitStart - right.codeUnitStart)
-    .map(({ codeUnitStart, codeUnitEnd, feature }) => {
-      const byteStart = encoder.encode(text.slice(0, codeUnitStart)).length;
-      const byteEnd = byteStart +
-        encoder.encode(text.slice(codeUnitStart, codeUnitEnd)).length;
+  return detected.sort((left, right) =>
+    left.codeUnitStart - right.codeUnitStart
+  );
+}
 
-      return {
-        index: { byteStart, byteEnd },
-        features: [feature],
-      };
-    });
+function materializeFacets(
+  text: string,
+  detected: readonly DetectedFacet[],
+): BlueskyFacet[] {
+  return detected.map(({ codeUnitStart, codeUnitEnd, feature }) => {
+    const byteStart = encoder.encode(text.slice(0, codeUnitStart)).length;
+    const byteEnd = byteStart +
+      encoder.encode(text.slice(codeUnitStart, codeUnitEnd)).length;
+
+    return {
+      index: { byteStart, byteEnd },
+      features: [feature],
+    };
+  });
+}
+
+function shortenUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return value;
+    }
+
+    const path = (url.pathname === "/" ? "" : url.pathname) +
+      url.search + url.hash;
+    const display = `${url.host}${path}`;
+    const graphemes = [...graphemeSegmenter.segment(display)].map((part) =>
+      part.segment
+    );
+
+    return graphemes.length > maxLinkDisplayLength
+      ? `${graphemes.slice(0, maxLinkDisplayLength - 1).join("")}…`
+      : display;
+  } catch {
+    return value;
+  }
+}
+
+function countGraphemes(text: string): number {
+  return [...graphemeSegmenter.segment(text)].length;
 }
 
 function overlapsDetected(
