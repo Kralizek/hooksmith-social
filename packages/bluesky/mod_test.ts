@@ -207,7 +207,7 @@ Deno.test("post does not create hashtag facets inside links", async () => {
     }
 
     const body = JSON.parse(String(init?.body));
-    assertEquals(body.record.text, "See example.com/#dotnet #deno");
+    assertEquals(body.record.text, "See example.com#dotnet #deno");
     assertEquals(body.record.facets, [
       {
         index: { byteStart: 4, byteEnd: 22 },
