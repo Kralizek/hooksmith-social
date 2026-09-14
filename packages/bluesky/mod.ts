@@ -72,6 +72,7 @@ interface PreparedRichText {
 }
 
 const maxGraphemeLength = 300;
+const maxLinkDisplayLength = 30;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
@@ -293,10 +294,14 @@ function shortenUrl(value: string): string {
 
     const path = (url.pathname === "/" ? "" : url.pathname) +
       url.search + url.hash;
+    const display = `${url.host}${path}`;
+    const graphemes = [...graphemeSegmenter.segment(display)].map((part) =>
+      part.segment
+    );
 
-    return path.length > 15
-      ? `${url.host}${path.slice(0, 14)}…`
-      : `${url.host}${path}`;
+    return graphemes.length > maxLinkDisplayLength
+      ? `${graphemes.slice(0, maxLinkDisplayLength - 1).join("")}…`
+      : display;
   } catch {
     return value;
   }
