@@ -50,11 +50,11 @@ Deno.test("post authenticates and creates a Bluesky post", async () => {
       collection: "app.bsky.feed.post",
       record: {
         $type: "app.bsky.feed.post",
-        text: "Published ✍️ https://example.com/hello",
+        text: "Published ✍️ example.com/hello",
         createdAt: "2026-09-01T12:00:00.000Z",
         langs: ["en"],
         facets: [{
-          index: { byteStart: 17, byteEnd: 42 },
+          index: { byteStart: 17, byteEnd: 34 },
           features: [{
             $type: "app.bsky.richtext.facet#link",
             uri: "https://example.com/hello",
@@ -97,8 +97,9 @@ Deno.test("post detects uppercase HTTP schemes", async () => {
     }
 
     const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.text, "Read: example.com/hello");
     assertEquals(body.record.facets, [{
-      index: { byteStart: 6, byteEnd: 31 },
+      index: { byteStart: 6, byteEnd: 23 },
       features: [{
         $type: "app.bsky.richtext.facet#link",
         uri: "HTTPS://example.com/hello",
@@ -130,8 +131,9 @@ Deno.test("post trims trailing punctuation from link facets", async () => {
     }
 
     const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.text, "Read: example.com/hello.");
     assertEquals(body.record.facets, [{
-      index: { byteStart: 6, byteEnd: 31 },
+      index: { byteStart: 6, byteEnd: 23 },
       features: [{
         $type: "app.bsky.richtext.facet#link",
         uri: "https://example.com/hello",
@@ -205,16 +207,17 @@ Deno.test("post does not create hashtag facets inside links", async () => {
     }
 
     const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.text, "See example.com/#dotnet #deno");
     assertEquals(body.record.facets, [
       {
-        index: { byteStart: 4, byteEnd: 31 },
+        index: { byteStart: 4, byteEnd: 22 },
         features: [{
           $type: "app.bsky.richtext.facet#link",
           uri: "https://example.com/#dotnet",
         }],
       },
       {
-        index: { byteStart: 32, byteEnd: 37 },
+        index: { byteStart: 23, byteEnd: 28 },
         features: [{
           $type: "app.bsky.richtext.facet#tag",
           tag: "deno",
