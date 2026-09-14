@@ -37,7 +37,7 @@ Deno.test("post shortens displayed links while preserving the target URI", async
       "Read https://renatogolia.com/2026/09/14/sc…",
     );
     assertEquals(body.record.facets, [{
-      index: { byteStart: 5, byteEnd: 47 },
+      index: { byteStart: 5, byteEnd: 37 },
       features: [{
         $type: "app.bsky.richtext.facet#link",
         uri:
