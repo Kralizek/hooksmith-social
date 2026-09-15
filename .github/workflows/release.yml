@@ -38,33 +38,9 @@ jobs:
 
       - name: Calculate version
         id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          latest_tag="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
-
-          if [[ -z "$latest_tag" ]]; then
-            version="0.1.0"
-          else
-            current="${latest_tag#v}"
-            IFS='.' read -r major minor patch <<< "$current"
-
-            case "${{ inputs.bump }}" in
-              major)
-                major=$((major + 1)); minor=0; patch=0 ;;
-              minor)
-                minor=$((minor + 1)); patch=0 ;;
-              patch)
-                patch=$((patch + 1)) ;;
-            esac
-
-            version="${major}.${minor}.${patch}"
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "previous_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+        uses: Kralizek/github-actions/actions/calculate-next-release@v0.2
+        with:
+          bump: ${{ inputs.bump }}
 
       - name: Set package versions
         env:
@@ -116,7 +92,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
-          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+          PREVIOUS_TAG: ${{ steps.version.outputs['previous-tag'] }}
         run: |
           set -euo pipefail
           args=("$TAG" --verify-tag --generate-notes --title "$TAG")
@@ -143,26 +119,26 @@ jobs:
           deno-version: v2.x
           cache: true
 
-      - name: Resolve release version
+      - name: Validate release tag
         id: version
-        shell: bash
+        uses: Kralizek/github-actions/actions/validate-release@v0.2
+        with:
+          tag: ${{ needs.create-release.outputs.tag }}
+          prerelease: false
+
+      - name: Validate package versions
         env:
-          TAG: ${{ needs.create-release.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Release tag $TAG is not a stable semantic version." >&2
-            exit 1
-          fi
-          version="${TAG#v}"
           while IFS= read -r manifest; do
             actual="$(jq -r .version "$manifest")"
-            if [[ "$actual" != "$version" ]]; then
-              echo "$manifest has version $actual, expected $version from tag $TAG" >&2
+            if [[ "$actual" != "$VERSION" ]]; then
+              echo "$manifest has version $actual, expected $VERSION" >&2
               exit 1
             fi
           done < <(jq -r '.workspace[] + "/deno.json"' deno.json)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check
         run: deno task check
