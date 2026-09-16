@@ -38,7 +38,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: Kralizek/github-actions/actions/calculate-next-release@v0.2
+        uses: Kralizek/github-actions/actions/calculate-next-version@v0.3
         with:
           bump: ${{ inputs.bump }}
 
@@ -121,7 +121,7 @@ jobs:
 
       - name: Validate release tag
         id: version
-        uses: Kralizek/github-actions/actions/validate-release@v0.2
+        uses: Kralizek/github-actions/actions/validate-release@v0.3
         with:
           tag: ${{ needs.create-release.outputs.tag }}
           prerelease: false
