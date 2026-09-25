@@ -38,7 +38,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: Kralizek/github-actions/actions/calculate-next-version@v0.3
+        uses: Kralizek/github-actions/actions/calculate-next-version@v0.4
         with:
           bump: ${{ inputs.bump }}
 
@@ -92,12 +92,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
-          PREVIOUS_TAG: ${{ steps.version.outputs['previous-tag'] }}
+          RELEASE_NOTES_START_TAG: ${{ steps.version.outputs['release-notes-start-tag'] }}
         run: |
           set -euo pipefail
           args=("$TAG" --verify-tag --generate-notes --title "$TAG")
-          if [[ -n "$PREVIOUS_TAG" ]]; then
-            args+=(--notes-start-tag "$PREVIOUS_TAG")
+          if [[ -n "$RELEASE_NOTES_START_TAG" ]]; then
+            args+=(--notes-start-tag "$RELEASE_NOTES_START_TAG")
           fi
           gh release create "${args[@]}"
 
