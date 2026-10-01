@@ -87,6 +87,7 @@ interface PreparedRichText {
 const maxGraphemeLength = 300;
 const maxLinkDisplayLength = 30;
 const maxThumbnailBytes = 1_000_000;
+const previewRequestTimeoutMs = 10_000;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
@@ -258,7 +259,9 @@ async function tryUploadThumbnail(
   }
 
   try {
-    const imageResponse = await fetch(imageUrl);
+    const imageResponse = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(previewRequestTimeoutMs),
+    });
     if (!imageResponse.ok) {
       await imageResponse.body?.cancel();
       log.warn("Could not fetch Bluesky external preview image", {
@@ -283,6 +286,15 @@ async function tryUploadThumbnail(
 
     const contentType = imageResponse.headers.get("content-type") ??
       "application/octet-stream";
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      await imageResponse.body?.cancel();
+      log.warn("Bluesky external preview thumbnail is not an image", {
+        url: logUrl,
+        contentType,
+      });
+      return undefined;
+    }
+
     const bytes = await readBoundedBody(imageResponse, maxThumbnailBytes);
 
     if (bytes === undefined) {
@@ -302,10 +314,12 @@ async function tryUploadThumbnail(
           "Content-Type": contentType,
         },
         body: bytes,
+        signal: AbortSignal.timeout(previewRequestTimeoutMs),
       },
     );
 
     if (!uploadResponse.ok) {
+      await uploadResponse.body?.cancel();
       log.warn("Could not upload Bluesky external preview image", {
         url: logUrl,
         status: uploadResponse.status,
