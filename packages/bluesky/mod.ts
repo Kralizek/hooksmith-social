@@ -86,7 +86,7 @@ interface PreparedRichText {
 
 const maxGraphemeLength = 300;
 const maxLinkDisplayLength = 30;
-const maxThumbnailBytes = 2_000_000;
+const maxThumbnailBytes = 1_000_000;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
@@ -271,6 +271,7 @@ async function tryUploadThumbnail(
       imageResponse.headers.get("content-length"),
     );
     if (declaredLength !== undefined && declaredLength > maxThumbnailBytes) {
+      await imageResponse.body?.cancel();
       log.warn("Bluesky external preview image exceeds maximum size", {
         url: logUrl,
         bytes: declaredLength,
