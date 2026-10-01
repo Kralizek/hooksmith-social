@@ -40,7 +40,7 @@ post({
 ```
 
 When `image` is provided, the image is downloaded and uploaded to the account's
-PDS as a blob. Only HTTP(S) image URLs are accepted, and callers should treat the
-URL as trusted input. Images larger than Bluesky's 2 MB limit are skipped. Image
-download or upload failures degrade to a preview without a thumbnail rather than
-preventing the text post from being published.
+PDS as a blob. Only HTTP(S) image URLs are accepted, and callers should treat
+the URL as trusted input. Images larger than Bluesky's 2 MB limit are skipped.
+Image download or upload failures degrade to a preview without a thumbnail
+rather than preventing the text post from being published.
