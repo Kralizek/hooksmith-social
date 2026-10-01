@@ -212,7 +212,6 @@ async function withFetch(
   }
 }
 
-
 Deno.test("post validates text length before fetching the preview image", async () => {
   let request = 0;
 
