@@ -13,6 +13,14 @@ export interface BlueskyPostResult {
   cid: string;
 }
 
+/** External preview metadata attached to a Bluesky post. */
+export interface BlueskyExternalPreview {
+  uri: string | URL;
+  title: string;
+  description: string;
+  image?: string | URL;
+}
+
 /** Options used to publish a Bluesky post from a Hooksmith event. */
 export interface BlueskyPostOptions<TEvent extends Event = Event> {
   identifier: ValueOrFactory<string, TEvent>;
@@ -21,6 +29,7 @@ export interface BlueskyPostOptions<TEvent extends Event = Event> {
   service?: ValueOrFactory<string | URL, TEvent>;
   languages?: ValueOrFactory<readonly string[], TEvent>;
   createdAt?: ValueOrFactory<string, TEvent>;
+  external?: ValueOrFactory<BlueskyExternalPreview | undefined, TEvent>;
 }
 
 interface BlueskySession {
@@ -36,6 +45,10 @@ interface BlueskyCreateRecordResponse {
 interface BlueskyErrorResponse {
   error?: string;
   message?: string;
+}
+
+interface BlueskyUploadBlobResponse {
+  blob: unknown;
 }
 
 type BlueskyFacetFeature =
@@ -73,6 +86,8 @@ interface PreparedRichText {
 
 const maxGraphemeLength = 300;
 const maxLinkDisplayLength = 30;
+const maxThumbnailBytes = 1_000_000;
+const previewRequestTimeoutMs = 10_000;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
@@ -151,6 +166,13 @@ export function post<TEvent extends Event = Event>(
         };
       }
 
+      const external = options.external === undefined
+        ? undefined
+        : await resolve(options.external, event, context);
+      const embed = external === undefined
+        ? undefined
+        : await prepareExternalEmbed(service, session, external, context);
+
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
         headers: bearerAuth(session.accessJwt),
@@ -165,6 +187,7 @@ export function post<TEvent extends Event = Event>(
             ...(richText.facets.length === 0
               ? {}
               : { facets: richText.facets }),
+            ...(embed === undefined ? {} : { embed }),
           },
         }),
         response: {
@@ -182,6 +205,190 @@ export function post<TEvent extends Event = Event>(
       }).run(event, context);
     },
   };
+}
+
+async function prepareExternalEmbed(
+  service: string,
+  session: BlueskySession,
+  external: BlueskyExternalPreview,
+  context: Context,
+): Promise<Record<string, unknown>> {
+  const thumb = external.image === undefined
+    ? undefined
+    : await tryUploadThumbnail(service, session, external.image, context);
+
+  return {
+    $type: "app.bsky.embed.external",
+    external: {
+      uri: String(external.uri),
+      title: external.title,
+      description: external.description,
+      ...(thumb === undefined ? {} : { thumb }),
+    },
+  };
+}
+
+async function tryUploadThumbnail(
+  service: string,
+  session: BlueskySession,
+  image: string | URL,
+  context: Context,
+): Promise<unknown | undefined> {
+  const log = context.logger.getLogger("BlueskyExternalPreview");
+  let imageUrl: URL;
+
+  try {
+    imageUrl = new URL(image);
+  } catch (error) {
+    log.warn(
+      "Invalid Bluesky external preview image URL",
+      {},
+      error,
+    );
+    return undefined;
+  }
+
+  const logUrl = redactUrl(imageUrl);
+
+  if (imageUrl.protocol !== "http:" && imageUrl.protocol !== "https:") {
+    log.warn("Unsupported Bluesky external preview image protocol", {
+      url: logUrl,
+      protocol: imageUrl.protocol,
+    });
+    return undefined;
+  }
+
+  try {
+    const imageResponse = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(previewRequestTimeoutMs),
+    });
+    if (!imageResponse.ok) {
+      await imageResponse.body?.cancel();
+      log.warn("Could not fetch Bluesky external preview image", {
+        url: logUrl,
+        status: imageResponse.status,
+      });
+      return undefined;
+    }
+
+    const declaredLength = parseContentLength(
+      imageResponse.headers.get("content-length"),
+    );
+    if (declaredLength !== undefined && declaredLength > maxThumbnailBytes) {
+      await imageResponse.body?.cancel();
+      log.warn("Bluesky external preview image exceeds maximum size", {
+        url: logUrl,
+        bytes: declaredLength,
+        maxBytes: maxThumbnailBytes,
+      });
+      return undefined;
+    }
+
+    const contentType = imageResponse.headers.get("content-type") ??
+      "application/octet-stream";
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      await imageResponse.body?.cancel();
+      log.warn("Bluesky external preview thumbnail is not an image", {
+        url: logUrl,
+        contentType,
+      });
+      return undefined;
+    }
+
+    const bytes = await readBoundedBody(imageResponse, maxThumbnailBytes);
+
+    if (bytes === undefined) {
+      log.warn("Bluesky external preview image exceeds maximum size", {
+        url: logUrl,
+        maxBytes: maxThumbnailBytes,
+      });
+      return undefined;
+    }
+
+    const uploadResponse = await fetch(
+      `${service}/xrpc/com.atproto.repo.uploadBlob`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.accessJwt}`,
+          "Content-Type": contentType,
+        },
+        body: bytes,
+        signal: AbortSignal.timeout(previewRequestTimeoutMs),
+      },
+    );
+
+    if (!uploadResponse.ok) {
+      await uploadResponse.body?.cancel();
+      log.warn("Could not upload Bluesky external preview image", {
+        url: logUrl,
+        status: uploadResponse.status,
+      });
+      return undefined;
+    }
+
+    const uploaded = await uploadResponse.json() as BlueskyUploadBlobResponse;
+    return uploaded.blob;
+  } catch (error) {
+    log.warn(
+      "Could not prepare Bluesky external preview image",
+      { url: logUrl },
+      error,
+    );
+    return undefined;
+  }
+}
+
+function redactUrl(url: URL): string {
+  const redacted = new URL(url);
+  redacted.username = "";
+  redacted.password = "";
+  redacted.search = "";
+  redacted.hash = "";
+  return redacted.toString();
+}
+
+function parseContentLength(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+async function readBoundedBody(
+  response: Response,
+  maxBytes: number,
+): Promise<ArrayBuffer | undefined> {
+  if (response.body === null) return new ArrayBuffer(0);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return undefined;
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return result.buffer as ArrayBuffer;
 }
 
 function prepareRichText(text: string): PreparedRichText {
