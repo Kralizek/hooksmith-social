@@ -20,7 +20,6 @@ CID.
 hosted on another PDS. `languages` and `createdAt` are optional; values may be
 static or event/context-derived factories.
 
-
 ## External previews
 
 Provide preview metadata explicitly with `external`. Hooksmith serializes it as
