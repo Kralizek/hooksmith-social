@@ -342,7 +342,6 @@ Deno.test("post ignores unsupported preview image protocols", async () => {
   });
 });
 
-
 Deno.test("post accepts a preview thumbnail at the one-megabyte boundary", async () => {
   let request = 0;
   const blob = {
@@ -390,7 +389,6 @@ Deno.test("post accepts a preview thumbnail at the one-megabyte boundary", async
     assertEquals(request, 4);
   });
 });
-
 
 Deno.test("post skips preview thumbnails with non-image content", async () => {
   let request = 0;
