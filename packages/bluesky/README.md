@@ -23,8 +23,8 @@ static or event/context-derived factories.
 
 ## External previews
 
-Provide preview metadata explicitly with `external`. Hooksmith serializes it as an
-`app.bsky.embed.external` embed; it does not fetch or parse page metadata.
+Provide preview metadata explicitly with `external`. Hooksmith serializes it as
+an `app.bsky.embed.external` embed; it does not fetch or parse page metadata.
 
 ```ts
 post({
