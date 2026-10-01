@@ -13,6 +13,14 @@ export interface BlueskyPostResult {
   cid: string;
 }
 
+/** External preview metadata attached to a Bluesky post. */
+export interface BlueskyExternalPreview {
+  uri: string | URL;
+  title: string;
+  description: string;
+  image?: string | URL;
+}
+
 /** Options used to publish a Bluesky post from a Hooksmith event. */
 export interface BlueskyPostOptions<TEvent extends Event = Event> {
   identifier: ValueOrFactory<string, TEvent>;
@@ -21,6 +29,7 @@ export interface BlueskyPostOptions<TEvent extends Event = Event> {
   service?: ValueOrFactory<string | URL, TEvent>;
   languages?: ValueOrFactory<readonly string[], TEvent>;
   createdAt?: ValueOrFactory<string, TEvent>;
+  external?: ValueOrFactory<BlueskyExternalPreview | undefined, TEvent>;
 }
 
 interface BlueskySession {
@@ -36,6 +45,10 @@ interface BlueskyCreateRecordResponse {
 interface BlueskyErrorResponse {
   error?: string;
   message?: string;
+}
+
+interface BlueskyUploadBlobResponse {
+  blob: unknown;
 }
 
 type BlueskyFacetFeature =
@@ -137,6 +150,12 @@ export function post<TEvent extends Event = Event>(
         ? undefined
         : await resolve(options.languages, event, context);
       const richText = prepareRichText(sourceText);
+      const external = options.external === undefined
+        ? undefined
+        : await resolve(options.external, event, context);
+      const embed = external === undefined
+        ? undefined
+        : await prepareExternalEmbed(service, session, external, context);
       const graphemeLength = countGraphemes(richText.text);
 
       if (graphemeLength > maxGraphemeLength) {
@@ -165,6 +184,7 @@ export function post<TEvent extends Event = Event>(
             ...(richText.facets.length === 0
               ? {}
               : { facets: richText.facets }),
+            ...(embed === undefined ? {} : { embed }),
           },
         }),
         response: {
@@ -182,6 +202,80 @@ export function post<TEvent extends Event = Event>(
       }).run(event, context);
     },
   };
+}
+
+async function prepareExternalEmbed(
+  service: string,
+  session: BlueskySession,
+  external: BlueskyExternalPreview,
+  context: Context,
+): Promise<Record<string, unknown>> {
+  const thumb = external.image === undefined
+    ? undefined
+    : await tryUploadThumbnail(service, session, external.image, context);
+
+  return {
+    $type: "app.bsky.embed.external",
+    external: {
+      uri: String(external.uri),
+      title: external.title,
+      description: external.description,
+      ...(thumb === undefined ? {} : { thumb }),
+    },
+  };
+}
+
+async function tryUploadThumbnail(
+  service: string,
+  session: BlueskySession,
+  image: string | URL,
+  context: Context,
+): Promise<unknown | undefined> {
+  const log = context.logger.getLogger("BlueskyExternalPreview");
+
+  try {
+    const imageResponse = await fetch(image);
+    if (!imageResponse.ok) {
+      log.warn("Could not fetch Bluesky external preview image", {
+        url: String(image),
+        status: imageResponse.status,
+      });
+      return undefined;
+    }
+
+    const contentType = imageResponse.headers.get("content-type") ??
+      "application/octet-stream";
+    const bytes = await imageResponse.arrayBuffer();
+    const uploadResponse = await fetch(
+      `${service}/xrpc/com.atproto.repo.uploadBlob`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.accessJwt}`,
+          "Content-Type": contentType,
+        },
+        body: bytes,
+      },
+    );
+
+    if (!uploadResponse.ok) {
+      log.warn("Could not upload Bluesky external preview image", {
+        url: String(image),
+        status: uploadResponse.status,
+      });
+      return undefined;
+    }
+
+    const uploaded = await uploadResponse.json() as BlueskyUploadBlobResponse;
+    return uploaded.blob;
+  } catch (error) {
+    log.warn(
+      "Could not prepare Bluesky external preview image",
+      { url: String(image) },
+      error,
+    );
+    return undefined;
+  }
 }
 
 function prepareRichText(text: string): PreparedRichText {
