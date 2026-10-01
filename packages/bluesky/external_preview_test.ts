@@ -390,3 +390,42 @@ Deno.test("post accepts a preview thumbnail at the one-megabyte boundary", async
     assertEquals(request, 4);
   });
 });
+
+
+Deno.test("post skips preview thumbnails with non-image content", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+
+    if (request === 1) return sessionResponse();
+
+    if (request === 2) {
+      assertEquals(init?.signal instanceof AbortSignal, true);
+      return Promise.resolve(
+        new Response("not an image", {
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.embed.external.thumb, undefined);
+    return createRecordResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello",
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "https://example.com/image.png",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, true);
+    assertEquals(request, 3);
+  });
+});
