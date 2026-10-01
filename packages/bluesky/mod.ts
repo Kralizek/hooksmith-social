@@ -86,6 +86,7 @@ interface PreparedRichText {
 
 const maxGraphemeLength = 300;
 const maxLinkDisplayLength = 30;
+const maxThumbnailBytes = 2_000_000;
 const linkPattern = /https?:\/\/(?:(?!,https?:\/\/)[^\s<>"'])+/giu;
 const trailingDelimiters = /[.,!?;:)\]}]+$/u;
 const tagPattern = /(^|[^\p{L}\p{N}_])#([\p{L}\p{N}_-]+)/gu;
@@ -150,12 +151,6 @@ export function post<TEvent extends Event = Event>(
         ? undefined
         : await resolve(options.languages, event, context);
       const richText = prepareRichText(sourceText);
-      const external = options.external === undefined
-        ? undefined
-        : await resolve(options.external, event, context);
-      const embed = external === undefined
-        ? undefined
-        : await prepareExternalEmbed(service, session, external, context);
       const graphemeLength = countGraphemes(richText.text);
 
       if (graphemeLength > maxGraphemeLength) {
@@ -169,6 +164,13 @@ export function post<TEvent extends Event = Event>(
           },
         };
       }
+
+      const external = options.external === undefined
+        ? undefined
+        : await resolve(options.external, event, context);
+      const embed = external === undefined
+        ? undefined
+        : await prepareExternalEmbed(service, session, external, context);
 
       return await httpPost<TEvent>({
         url: `${service}/xrpc/com.atproto.repo.createRecord`,
@@ -232,20 +234,51 @@ async function tryUploadThumbnail(
   context: Context,
 ): Promise<unknown | undefined> {
   const log = context.logger.getLogger("BlueskyExternalPreview");
+  const imageUrl = new URL(image);
+  const logUrl = redactUrl(imageUrl);
+
+  if (imageUrl.protocol !== "http:" && imageUrl.protocol !== "https:") {
+    log.warn("Unsupported Bluesky external preview image protocol", {
+      url: logUrl,
+      protocol: imageUrl.protocol,
+    });
+    return undefined;
+  }
 
   try {
-    const imageResponse = await fetch(image);
+    const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
       log.warn("Could not fetch Bluesky external preview image", {
-        url: String(image),
+        url: logUrl,
         status: imageResponse.status,
+      });
+      return undefined;
+    }
+
+    const declaredLength = parseContentLength(
+      imageResponse.headers.get("content-length"),
+    );
+    if (declaredLength !== undefined && declaredLength > maxThumbnailBytes) {
+      log.warn("Bluesky external preview image exceeds maximum size", {
+        url: logUrl,
+        bytes: declaredLength,
+        maxBytes: maxThumbnailBytes,
       });
       return undefined;
     }
 
     const contentType = imageResponse.headers.get("content-type") ??
       "application/octet-stream";
-    const bytes = await imageResponse.arrayBuffer();
+    const bytes = await readBoundedBody(imageResponse, maxThumbnailBytes);
+
+    if (bytes === undefined) {
+      log.warn("Bluesky external preview image exceeds maximum size", {
+        url: logUrl,
+        maxBytes: maxThumbnailBytes,
+      });
+      return undefined;
+    }
+
     const uploadResponse = await fetch(
       `${service}/xrpc/com.atproto.repo.uploadBlob`,
       {
@@ -260,7 +293,7 @@ async function tryUploadThumbnail(
 
     if (!uploadResponse.ok) {
       log.warn("Could not upload Bluesky external preview image", {
-        url: String(image),
+        url: logUrl,
         status: uploadResponse.status,
       });
       return undefined;
@@ -271,11 +304,63 @@ async function tryUploadThumbnail(
   } catch (error) {
     log.warn(
       "Could not prepare Bluesky external preview image",
-      { url: String(image) },
+      { url: logUrl },
       error,
     );
     return undefined;
   }
+}
+
+function redactUrl(url: URL): string {
+  const redacted = new URL(url);
+  redacted.username = "";
+  redacted.password = "";
+  redacted.search = "";
+  redacted.hash = "";
+  return redacted.toString();
+}
+
+function parseContentLength(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+async function readBoundedBody(
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array | undefined> {
+  if (response.body === null) return new Uint8Array();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return undefined;
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return result;
 }
 
 function prepareRichText(text: string): PreparedRichText {
