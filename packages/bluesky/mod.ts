@@ -234,7 +234,19 @@ async function tryUploadThumbnail(
   context: Context,
 ): Promise<unknown | undefined> {
   const log = context.logger.getLogger("BlueskyExternalPreview");
-  const imageUrl = new URL(image);
+  let imageUrl: URL;
+
+  try {
+    imageUrl = new URL(image);
+  } catch (error) {
+    log.warn(
+      "Invalid Bluesky external preview image URL",
+      {},
+      error,
+    );
+    return undefined;
+  }
+
   const logUrl = redactUrl(imageUrl);
 
   if (imageUrl.protocol !== "http:" && imageUrl.protocol !== "https:") {
