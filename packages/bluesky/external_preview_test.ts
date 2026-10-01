@@ -249,7 +249,7 @@ Deno.test("post omits preview thumbnails with an oversized content length", asyn
         new Response(new Uint8Array([1]), {
           headers: {
             "content-type": "image/png",
-            "content-length": "2000001",
+            "content-length": "1000001",
           },
         }),
       );
@@ -286,7 +286,7 @@ Deno.test("post bounds preview image reads when content length is absent", async
 
     if (request === 2) {
       return Promise.resolve(
-        new Response(new Uint8Array(2_000_001), {
+        new Response(new Uint8Array(1_000_001), {
           headers: { "content-type": "image/png" },
         }),
       );
@@ -339,5 +339,54 @@ Deno.test("post ignores unsupported preview image protocols", async () => {
 
     assertEquals(result.success, true);
     assertEquals(request, 2);
+  });
+});
+
+
+Deno.test("post accepts a preview thumbnail at the one-megabyte boundary", async () => {
+  let request = 0;
+  const blob = {
+    $type: "blob",
+    ref: { $link: "bafkthumb" },
+    mimeType: "image/png",
+    size: 1_000_000,
+  };
+
+  await withFetch((_input, init) => {
+    request++;
+
+    if (request === 1) return sessionResponse();
+
+    if (request === 2) {
+      return Promise.resolve(
+        new Response(new Uint8Array(1_000_000), {
+          headers: {
+            "content-type": "image/png",
+            "content-length": "1000000",
+          },
+        }),
+      );
+    }
+
+    if (request === 3) return Promise.resolve(Response.json({ blob }));
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.embed.external.thumb, blob);
+    return createRecordResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello",
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "https://example.com/image.png",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, true);
+    assertEquals(request, 4);
   });
 });
