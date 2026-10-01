@@ -260,6 +260,7 @@ async function tryUploadThumbnail(
   try {
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
+      await imageResponse.body?.cancel();
       log.warn("Could not fetch Bluesky external preview image", {
         url: logUrl,
         status: imageResponse.status,
