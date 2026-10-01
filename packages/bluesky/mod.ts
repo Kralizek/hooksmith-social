@@ -341,8 +341,8 @@ function parseContentLength(value: string | null): number | undefined {
 async function readBoundedBody(
   response: Response,
   maxBytes: number,
-): Promise<Uint8Array | undefined> {
-  if (response.body === null) return new Uint8Array();
+): Promise<ArrayBuffer | undefined> {
+  if (response.body === null) return new ArrayBuffer(0);
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -372,7 +372,7 @@ async function readBoundedBody(
     offset += chunk.byteLength;
   }
 
-  return result;
+  return result.buffer as ArrayBuffer;
 }
 
 function prepareRichText(text: string): PreparedRichText {
