@@ -211,3 +211,134 @@ async function withFetch(
     globalThis.fetch = original;
   }
 }
+
+
+Deno.test("post validates text length before fetching the preview image", async () => {
+  let request = 0;
+
+  await withFetch(() => {
+    request++;
+    return sessionResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "a".repeat(301),
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "https://example.com/image.png",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, false);
+    assertEquals(request, 1);
+  });
+});
+
+Deno.test("post omits preview thumbnails with an oversized content length", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+
+    if (request === 1) return sessionResponse();
+
+    if (request === 2) {
+      return Promise.resolve(
+        new Response(new Uint8Array([1]), {
+          headers: {
+            "content-type": "image/png",
+            "content-length": "2000001",
+          },
+        }),
+      );
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.embed.external.thumb, undefined);
+    return createRecordResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello",
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "https://example.com/image.png",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, true);
+    assertEquals(request, 3);
+  });
+});
+
+Deno.test("post bounds preview image reads when content length is absent", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+
+    if (request === 1) return sessionResponse();
+
+    if (request === 2) {
+      return Promise.resolve(
+        new Response(new Uint8Array(2_000_001), {
+          headers: { "content-type": "image/png" },
+        }),
+      );
+    }
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.embed.external.thumb, undefined);
+    return createRecordResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello",
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "https://example.com/image.png",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, true);
+    assertEquals(request, 3);
+  });
+});
+
+Deno.test("post ignores unsupported preview image protocols", async () => {
+  let request = 0;
+
+  await withFetch((_input, init) => {
+    request++;
+
+    if (request === 1) return sessionResponse();
+
+    const body = JSON.parse(String(init?.body));
+    assertEquals(body.record.embed.external.thumb, undefined);
+    return createRecordResponse();
+  }, async () => {
+    const result = await post({
+      identifier: "example.bsky.social",
+      appPassword: "app-password",
+      text: "Hello",
+      external: {
+        uri: "https://example.com/hello",
+        title: "Hello",
+        description: "Description",
+        image: "file:///etc/passwd",
+      },
+    }).run(event, context);
+
+    assertEquals(result.success, true);
+    assertEquals(request, 2);
+  });
+});
